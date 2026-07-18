@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hash Checker — вычисление хешей файлов</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f5f5f5;
+    --border: #ddd;
+    --text: #222;
+    --text-secondary: #666;
+    --accent: #4f46e5;
+    --accent-hover: #4338ca;
+    --success: #16a34a;
+    --danger: #dc2626;
+    --drop-bg: #f0f0ff;
+    --shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+  .dark {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --border: #2a2a4a;
+    --text: #e0e0e0;
+    --text-secondary: #999;
+    --accent: #818cf8;
+    --accent-hover: #6366f1;
+    --success: #4ade80;
+    --danger: #f87171;
+    --drop-bg: #1e1e3a;
+    --shadow: 0 2px 12px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    transition: background 0.3s, color 0.3s;
+  }
+  .container { max-width: 780px; margin: 0 auto; padding: 32px 20px; }
+  header {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;
+  }
+  h1 { font-size: 24px; font-weight: 700; }
+  .theme-toggle {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px;
+    transition: background 0.2s;
+  }
+  .theme-toggle:hover { opacity: 0.85; }
+
+  .drop-zone {
+    border: 2px dashed var(--border); border-radius: 12px; padding: 48px 20px;
+    text-align: center; cursor: pointer; transition: all 0.25s; background: var(--drop-bg);
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--drop-bg));
+  }
+  .drop-zone-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.6; }
+  .drop-zone-text { font-size: 16px; color: var(--text-secondary); }
+  .drop-zone-hint { font-size: 13px; color: var(--text-secondary); margin-top: 8px; }
+  #fileInput { display: none; }
+
+  .file-info {
+    display: none; margin-top: 20px; padding: 16px 20px;
+    background: var(--surface); border-radius: 10px; border: 1px solid var(--border);
+  }
+  .file-info.visible { display: block; }
+  .file-info-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  .file-info-label { color: var(--text-secondary); font-size: 13px; }
+  .file-info-value { font-weight: 600; font-size: 14px; word-break: break-all; }
+
+  .hashes {
+    display: none; margin-top: 20px;
+  }
+  .hashes.visible { display: block; }
+  .hash-item {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 20px; margin-bottom: 12px;
+  }
+  .hash-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 4px; }
+  .hash-value {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 14px;
+    word-break: break-all; user-select: all; cursor: copy;
+  }
+
+  .verify-section {
+    display: none; margin-top: 20px; padding: 16px 20px;
+    background: var(--surface); border-radius: 10px; border: 1px solid var(--border);
+  }
+  .verify-section.visible { display: block; }
+  .verify-section label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .verify-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .verify-row select, .verify-row input {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 10px 14px; border-radius: 8px; font-size: 14px;
+  }
+  .verify-row select { flex: 0 0 120px; }
+  .verify-row input { flex: 1; min-width: 180px; }
+  .verify-result {
+    margin-top: 10px; padding: 10px 14px; border-radius: 8px; font-weight: 600;
+    display: none;
+  }
+  .verify-result.visible { display: block; }
+  .verify-result.match { background: color-mix(in srgb, var(--success) 20%, transparent); color: var(--success); }
+  .verify-result.nomatch { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--danger); }
+
+  .spinner {
+    display: none; width: 24px; height: 24px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite;
+    margin: 20px auto;
+  }
+  .spinner.visible { display: block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-msg {
+    display: none; margin-top: 12px; padding: 12px; border-radius: 8px;
+    background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger);
+    font-size: 14px;
+  }
+  .error-msg.visible { display: block; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>🔐 Hash Checker</h1>
+    <button class="theme-toggle" id="themeToggle">🌙 Тёмная тема</button>
+  </header>
+
+  <div class="drop-zone" id="dropZone">
+    <div class="drop-zone-icon">📁</div>
+    <div class="drop-zone-text">Перетащите файл сюда или нажмите для выбора</div>
+    <div class="drop-zone-hint">Поддерживаются любые файлы</div>
+    <input type="file" id="fileInput">
+  </div>
+
+  <div class="spinner" id="spinner"></div>
+  <div class="error-msg" id="errorMsg"></div>
+
+  <div class="file-info" id="fileInfo">
+    <div class="file-info-row">
+      <span class="file-info-label">Имя файла</span>
+      <span class="file-info-value" id="fileName">—</span>
+    </div>
+    <div class="file-info-row">
+      <span class="file-info-label">Размер</span>
+      <span class="file-info-value" id="fileSize">—</span>
+    </div>
+  </div>
+
+  <div class="hashes" id="hashes">
+    <div class="hash-item">
+      <div class="hash-label">MD5</div>
+      <div class="hash-value" id="hashMd5">—</div>
+    </div>
+    <div class="hash-item">
+      <div class="hash-label">SHA-1</div>
+      <div class="hash-value" id="hashSha1">—</div>
+    </div>
+    <div class="hash-item">
+      <div class="hash-label">SHA-256</div>
+      <div class="hash-value" id="hashSha256">—</div>
+    </div>
+    <div class="hash-item">
+      <div class="hash-label">SHA-512</div>
+      <div class="hash-value" id="hashSha512">—</div>
+    </div>
+  </div>
+
+  <div class="verify-section" id="verifySection">
+    <label>🔍 Проверить хеш</label>
+    <div class="verify-row">
+      <select id="verifyAlgo">
+        <option value="md5">MD5</option>
+        <option value="sha1">SHA-1</option>
+        <option value="sha256" selected>SHA-256</option>
+        <option value="sha512">SHA-512</option>
+      </select>
+      <input type="text" id="verifyInput" placeholder="Вставьте ожидаемый хеш...">
+    </div>
+    <div class="verify-result" id="verifyResult"></div>
+  </div>
+</div>
+
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const spinner = document.getElementById('spinner');
+const errorMsg = document.getElementById('errorMsg');
+const fileInfo = document.getElementById('fileInfo');
+const fileName = document.getElementById('fileName');
+const fileSize = document.getElementById('fileSize');
+const hashes = document.getElementById('hashes');
+const hashMd5 = document.getElementById('hashMd5');
+const hashSha1 = document.getElementById('hashSha1');
+const hashSha256 = document.getElementById('hashSha256');
+const hashSha512 = document.getElementById('hashSha512');
+const verifySection = document.getElementById('verifySection');
+const verifyAlgo = document.getElementById('verifyAlgo');
+const verifyInput = document.getElementById('verifyInput');
+const verifyResult = document.getElementById('verifyResult');
+const themeToggle = document.getElementById('themeToggle');
+
+let currentHashes = {};
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' Б';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' КБ';
+  if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' МБ';
+  return (bytes / 1073741824).toFixed(2) + ' ГБ';
+}
+
+function showError(msg) {
+  errorMsg.textContent = msg;
+  errorMsg.classList.add('visible');
+}
+function hideError() { errorMsg.classList.remove('visible'); }
+
+dropZone.addEventListener('click', () => fileInput.click());
+
+dropZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropZone.classList.add('dragover');
+});
+dropZone.addEventListener('dragleave', () => {
+  dropZone.classList.remove('dragover');
+});
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const files = e.dataTransfer.files;
+  if (files.length) processFile(files[0]);
+});
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) processFile(fileInput.files[0]);
+});
+
+async function processFile(file) {
+  hideError();
+  spinner.classList.add('visible');
+  hashes.classList.remove('visible');
+  fileInfo.classList.remove('visible');
+  verifySection.classList.remove('visible');
+  verifyResult.classList.remove('visible');
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const base64 = arrayBufferToBase64(buffer);
+
+    const res = await fetch('/api/hash', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileName: file.name, fileData: base64 }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Ошибка сервера');
+    }
+
+    const data = await res.json();
+    currentHashes = data;
+
+    fileName.textContent = data.fileName;
+    fileSize.textContent = formatSize(data.fileSize);
+    fileInfo.classList.add('visible');
+
+    hashMd5.textContent = data.md5;
+    hashSha1.textContent = data.sha1;
+    hashSha256.textContent = data.sha256;
+    hashSha512.textContent = data.sha512;
+    hashes.classList.add('visible');
+
+    verifyInput.value = '';
+    verifyResult.classList.remove('visible');
+    verifySection.classList.add('visible');
+  } catch (err) {
+    showError('Ошибка: ' + err.message);
+  } finally {
+    spinner.classList.remove('visible');
+  }
+}
+
+function arrayBufferToBase64(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+verifyInput.addEventListener('input', () => {
+  const algo = verifyAlgo.value;
+  const expected = verifyInput.value.trim().toLowerCase();
+  if (!expected || !currentHashes[algo]) {
+    verifyResult.classList.remove('visible');
+    return;
+  }
+  const computed = currentHashes[algo].toLowerCase();
+  const isMatch = expected === computed;
+  verifyResult.textContent = isMatch ? '✅ Хеш совпадает!' : '❌ Хеш не совпадает';
+  verifyResult.className = 'verify-result visible ' + (isMatch ? 'match' : 'nomatch');
+});
+
+document.querySelectorAll('.hash-value').forEach(el => {
+  el.addEventListener('click', () => {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    try { document.execCommand('copy'); } catch(e) {}
+  });
+});
+
+const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+const savedTheme = localStorage.getItem('hash-checker-theme');
+if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+  document.body.classList.add('dark');
+  themeToggle.textContent = '☀️ Светлая тема';
+}
+
+themeToggle.addEventListener('click', () => {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  themeToggle.textContent = isDark ? '☀️ Светлая тема' : '🌙 Тёмная тема';
+  localStorage.setItem('hash-checker-theme', isDark ? 'dark' : 'light');
+});
+</script>
+</body>
+</html>
