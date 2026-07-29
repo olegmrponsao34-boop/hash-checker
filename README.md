@@ -6,8 +6,6 @@
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
   <img src="https://img.shields.io/badge/dependencies-0-success" alt="Zero deps">
 </p>
-
-
 Веб-инструмент для вычисления хешей файлов (MD5, SHA-1, SHA-256, SHA-512).
 
 ## Возможности
